@@ -106,10 +106,12 @@ LedgerLeaf/
 
 ### Prerequisites
 - **Python:** 3.10 or higher (tested with Python 3.12.3)
-- **Tesseract OCR (optional, for images and scanned PDFs):**
-  - **Ubuntu / Debian:** `sudo apt-get install -y tesseract-ocr`
-  - **macOS:** `brew install tesseract`
-  - **Windows:** Download from UB-Mannheim Tesseract installer and add to system PATH.
+- **Tesseract OCR (System dependency for images and scanned PDFs):**
+  > **Note:** Python's `pytesseract` library is already listed in `requirements.txt`, but it requires the native Tesseract OCR engine installed on your operating system to process images (`.png`, `.jpg`, `.webp`) and scanned PDFs:
+  - **Ubuntu / Debian:** `sudo apt-get update && sudo apt-get install -y tesseract-ocr`
+  - **macOS (Homebrew):** `brew install tesseract`
+  - **Windows:** Download the installer from [UB-Mannheim Tesseract](https://github.com/UB-Mannheim/tesseract/wiki) and ensure it is added to your system `PATH`.
+  *(Text-based PDFs and `.txt` files do not require Tesseract and work out of the box).*
 
 ### 1. Clone & Set Up Virtual Environment
 ```bash

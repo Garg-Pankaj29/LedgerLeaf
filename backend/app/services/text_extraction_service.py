@@ -97,8 +97,9 @@ class TextExtractionService:
                         ocr_texts.append(text.strip())
                 except pytesseract.TesseractNotFoundError:
                     raise OCRError(
-                        "PDF contains scanned images, but Tesseract OCR is not installed on this system. "
-                        "Install tesseract-ocr to enable scanned document processing."
+                        "PDF contains scanned images, but Tesseract OCR binary is not installed on this system. "
+                        "Install it via your package manager (e.g. `sudo apt install tesseract-ocr` on Ubuntu/Debian, "
+                        "`brew install tesseract` on macOS, or UB-Mannheim installer on Windows) to process scanned documents."
                     )
                 except Exception as exc:
                     # Continue attempting other images
@@ -133,7 +134,8 @@ class TextExtractionService:
         except pytesseract.TesseractNotFoundError:
             raise OCRError(
                 "Local OCR engine (Tesseract) is not installed on this machine. "
-                "Install tesseract-ocr (e.g. `sudo apt-get install tesseract-ocr`) to process image files."
+                "Install it via your package manager (e.g. `sudo apt install tesseract-ocr` on Ubuntu/Debian, "
+                "`brew install tesseract` on macOS, or UB-Mannheim installer on Windows) to process image receipts."
             )
         except TextExtractionError:
             raise
