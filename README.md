@@ -1,142 +1,210 @@
-# LedgerLeaf — Your finances. Your files. Your AI.
+# LedgerLeaf
 
-**LedgerLeaf** is a local-first, privacy-respecting financial document processing application that turns receipts, invoices, and paperwork into structured accounting records on your own machine. Every number points directly back to the line it came from in the original document, and nothing enters your approved ledger until you explicitly review and verify it.
+> A private, local-first financial document processing assistant. Open-weight AI extracts structured accounting records from messy receipts and invoices on your own device, guarded by deterministic verification and visual source provenance before anything touches your ledger.
 
----
-
-## 1. Core Principles & Philosophy
-
-1. **Local-First & Private by Default:** All text extraction, OCR, database storage, and AI inference run locally on `127.0.0.1`. Uploaded files are stored in `data/uploads/` outside the web directory. Documents never leave your computer unless you explicitly export CSV data or configure an external integration.
-2. **Deterministic Arithmetic Guards:** Local models can misread numbers or make arithmetic mistakes. The AI model proposes structured values; deterministic validation rules cross-check math (`subtotal + tax == total`), dates, and required fields; and a human approves before anything enters the ledger. The system never silently alters numbers to make math balance.
-3. **Source Provenance & Line Highlighting:** Every extracted field links back to its character offset and verbatim snippet in the source document so you can click any field to verify it against the source text.
-4. **Integer Minor Units:** All monetary amounts are stored internally as integer minor units (e.g. cents, paise) with ISO 4217 currency codes (`USD`, `EUR`, `GBP`, `INR`) to eliminate floating-point precision loss.
-5. **Strict Multi-Currency Isolation:** Ledger totals and category summaries never merge different currencies into a meaningless combined total. Each currency stays on its own dedicated ledger balance.
-6. **No Fake Output or Invented Values:** When fields are missing from source paperwork, they remain unpopulated (`null`) rather than being fabricated. If local AI is offline or encounters an error, the backend reports honest error states with actionable details rather than returning mock success.
-7. **Not an Accounting Firm Replacement:** LedgerLeaf is an intelligent document review and ingestion assistant. It does not replace a certified public accountant, tax adviser, or full double-entry accounting suite.
+[![Hacktoberfest 2026](https://img.shields.io/badge/Hacktoberfest-2026-orange.svg)](#hacktoberfest--open-source-ai-challenge)
+[![License-MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Local_AI-LM_Studio](https://img.shields.io/badge/Local_AI-LM_Studio-green.svg)](#technical-details)
+[![FastAPI](https://img.shields.io/badge/Backend-FastAPI-teal.svg)](#technical-details)
+[![SQLite](https://img.shields.io/badge/Database-SQLite-003B57.svg)](#technical-details)
 
 ---
 
-## 2. Architecture & Project Tree
+## Concept
+
+Modern financial software forces freelancers, contractors, and small business owners into a bad trade-off: spend hours manually transcribing paper receipts into spreadsheets, or upload sensitive financial records, client names, and bank details to proprietary cloud APIs.
+
+**LedgerLeaf** inverts this model:
+
+> *"Your finances. Your files. Your AI."*
+
+LedgerLeaf runs entirely on your local machine bound strictly to `127.0.0.1`. You drop in receipts or invoices (`.pdf`, `.png`, `.jpg`, `.webp`, `.txt`). A local open-weight model parses vendor details, invoice numbers, dates, currency, and line totals.
+
+Crucially, **the AI proposes, but never dictates**. Every extracted amount links directly back to its verbatim character offset and line in the source document. Deterministic mathematical guards cross-check `subtotal + tax == total`. You review, correct any flagged discrepancies on the visual review bench, and approve the record into your persistent SQLite ledger with one click—exportable to clean, multi-currency RFC 4180 CSVs.
+
+---
+
+## Core Loop
+
+```mermaid
+graph TD
+    A[Upload Receipt / Invoice PDF or Image] --> B[PyMuPDF / Local Tesseract OCR Extracts Text]
+    B --> C[Local LLM Extracts Structured Fields & Provenance]
+    C --> D[Deterministic Arithmetic & Date Guardrails Run]
+    D --> E[Interactive Review Bench: Highlight Source & Edit]
+    E --> F{Math Checks & Human Verification Pass?}
+    F -- Issues Flagged --> E
+    F -- Approved --> G[Commit to Immutable SQLite Ledger]
+    G --> H[Multi-Currency Analytics & RFC 4180 CSV Export]
+```
+
+---
+
+## System Architecture
+
+LedgerLeaf operates as a self-contained local application communicating exclusively over local loopback (`127.0.0.1`).
+
+### Ingestion & Extraction Flow
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as User / Browser
+    participant API as FastAPI Backend (127.0.0.1:8000)
+    participant Storage as Local Storage (data/uploads)
+    participant OCR as Text / OCR Engine
+    participant LLM as LM Studio / Local AI (127.0.0.1:1234)
+    participant DB as SQLite (data/ledgerleaf.db)
+
+    User->>API: POST /api/v1/documents (multipart upload)
+    API->>Storage: Validate MIME, magic bytes, SHA-256 hash & store
+    API->>OCR: Extract digital text (PDF) or OCR (Tesseract)
+    API->>LLM: POST /v1/chat/completions (Strict JSON Schema)
+    LLM-->>API: Structured Extraction (vendor, date, amounts, offsets)
+    API->>API: Run Math Guard (subtotal + tax == total)
+    API->>DB: Save Document, ExtractionResult & FieldProvenance
+    API-->>User: Render Review Bench with Pinning & Guard Chips
+```
+
+### Review, Verification & Ledger Commit Flow
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as User / Browser
+    participant API as FastAPI Backend
+    participant DB as SQLite (data/ledgerleaf.db)
+
+    User->>API: PATCH /api/v1/documents/{id}/extraction (Optional user corrections)
+    API->>DB: Update values & record user edit in FieldProvenance
+    User->>API: POST /api/v1/documents/{id}/approve
+    API->>API: Enforce Deterministic Validation (Hard block on math errors)
+    API->>DB: Create immutable LedgerEntry (Integer minor units)
+    API->>DB: Update document status to 'approved'
+    API-->>User: 200 OK + Updated Ledger Summary & Multi-Currency Totals
+```
+
+---
+
+## Key Features
+
+- **100% Local-First & Private:** All text extraction, OCR, database persistence, and LLM inference execute locally on `127.0.0.1`. No external APIs, cloud subscriptions, or remote analytics.
+- **Visual Source Provenance:** Every parsed field links to its character offset and verbatim snippet in the source document. Clicking a field highlights its source location on the page.
+- **Deterministic Arithmetic Guardrails:** Open-weight models can misread grainy receipts. Pure deterministic Python rules verify calculations (`abs(subtotal + tax - total) < 0.01`). The system flags math mismatches instead of silently falsifying numbers.
+- **Integer Minor Units:** All monetary values are handled internally as integer minor units (cents, paise) with ISO 4217 currency codes to eliminate floating-point precision errors.
+- **Strict Multi-Currency Isolation:** Ledger totals never merge EUR, USD, and INR into an arbitrary converted sum. Each currency balance is calculated and presented in its own ledger line.
+- **Interactive Leaf Design System:** Custom responsive UI featuring leaf-vein canvas animations, accessible contrast tokens, light/dark themes, and instant keyboard shortcuts.
+- **RFC 4180 CSV Export:** Exports cleanly formatted CSVs with proper field quoting and formula-injection defenses (`=`, `+`, `-`, `@` sanitization).
+
+---
+
+## Technical Details
+
+| Component | Implementation | Description |
+|---|---|---|
+| **Backend** | [FastAPI](https://fastapi.tiangolo.com/) | High-performance asynchronous Python API server |
+| **Database** | [SQLite](https://www.sqlite.org/) + [SQLAlchemy 2.0](https://www.sqlalchemy.org/) | ACID-compliant local database with schema migrations via Alembic |
+| **Data Validation** | [Pydantic v2](https://docs.pydantic.dev/) | Strict typing, schema serialization, and request validation |
+| **PDF Extraction** | [PyMuPDF / pypdf](https://pypdf.readthedocs.io/) | High-speed digital text layer and metadata extraction |
+| **OCR Engine** | [pytesseract](https://pypi.org/project/pytesseract/) + [Pillow](https://python-pillow.org/) | Local optical character recognition for scans and image receipts |
+| **Local AI Runtime** | [LM Studio](https://lmstudio.ai/) / [Ollama](https://ollama.com/) | Local OpenAI-compatible REST server on `127.0.0.1:1234/v1` |
+| **AI Models** | Open-Weight LLMs | Tested with `llama-3.2-1b-instruct`, `gemma-3-4b`, `qwen3-8b` |
+| **Frontend** | Vanilla JS (ES Modules) + CSS3 | No heavy Node build step; native procedural canvas leaf veins |
+| **HTTP Client** | [HTTPX](https://www.python-httpx.org/) | Asynchronous communication between backend and local AI server |
+| **Test Suite** | [Pytest](https://docs.pytest.org/) | Automated integration tests covering ingestion, guards, and ledger |
+
+---
+
+## Project Structure
 
 ```text
 LedgerLeaf/
 ├── LedgerLeaf.html                # Original standalone leaf-themed prototype
-├── README.md                      # Comprehensive architecture, setup, and troubleshooting guide
 ├── requirements.txt               # Pinned Python dependencies
-├── pytest.ini                     # Pytest configuration with pythonpath
+├── pytest.ini                     # Pytest configuration
 ├── alembic.ini                    # Alembic migration configuration
-├── .env                           # Local environment configuration (git-ignored)
 ├── .env.example                   # Environment configuration template
-├── .gitignore                     # Git ignore rules for .env, DB, uploads, .venv
-├── alembic/                       # Alembic database migration management
-│   ├── env.py                     # Migration runner with SQLite batch alter support
-│   ├── script.py.mako             # Revision template
-│   └── versions/                  # Versioned schema migrations
-├── data/                          # Private runtime data directory (git-ignored)
-│   ├── ledgerleaf.db              # SQLite database (auto-migrated)
-│   └── uploads/                   # Stored original receipt and invoice files
-├── frontend/                      # Modular leaf-inspired client application
-│   ├── index.html                 # UI entry point with accessibility tags & responsive layout
-│   ├── assets/                    # Icons and static brand assets
+├── .gitignore                     # Git rules (excludes secrets, uploads, SQLite DBs)
+├── alembic/                       # Database schema versioning & migrations
+│   ├── env.py                     # SQLite batch alter migration runner
+│   └── versions/                  # Revision files
+├── data/                          # Local runtime storage (git-ignored)
+│   ├── ledgerleaf.db              # SQLite database file
+│   ├── samples/                   # Synthetic receipt & invoice fixtures
+│   └── uploads/                   # Secure original uploaded document files
+├── frontend/                      # Web UI client application
+│   ├── index.html                 # Semantic HTML5 application entry point
+│   ├── assets/                    # Static brand assets
 │   ├── css/
-│   │   └── style.css              # Curated leaf design tokens, dark/light themes, typography
+│   │   └── style.css              # Curated leaf design system, themes, and layout
 │   └── js/
-│       ├── api.js                 # FastAPI client module (no direct browser-to-AI calls)
-│       ├── app.js                 # Review bench, field pinning, guard, ledger, and CSV export
-│       └── veins.js               # Canvas leaf-vein procedural branch animation
-└── backend/                       # Python FastAPI backend
-    ├── requirements.txt           # Backend package dependencies
-    ├── app/
-    │   ├── main.py                # FastAPI entry point, CORS, lifespan, and static mounting
-    │   ├── config.py              # Pydantic BaseSettings, host, port, directory management
-    │   ├── database.py            # SQLite engine, session maker, and schema init
-    │   ├── api/
-    │   │   └── v1/
-    │   │       ├── router.py      # Aggregated v1 API router
-    │   │       ├── health.py      # GET /api/v1/health
-    │   │       ├── ai.py          # GET /api/v1/ai/status, test-connection, models
-    │   │       ├── documents.py   # Ingestion, review, PATCH editing, validation, approval, deletion
-    │   │       └── ledger.py      # Approved ledger, multi-currency summary, RFC 4180 CSV export
-    │   ├── models/                # SQLAlchemy ORM models
-    │   │   ├── document.py        # Document entity (statuses, extracted_text, hash)
-    │   │   ├── extraction.py      # ExtractionResult entity (minor units, method, issues)
-    │   │   ├── ledger.py          # LedgerEntry entity (immutable approved accounting records)
-    │   │   └── provenance.py      # FieldProvenance entity (snippets, offsets, user edits)
-    │   ├── schemas/               # Pydantic v2 validation schemas
-    │   │   ├── common.py          # Health and AI status schemas
-    │   │   ├── document.py        # Document upload and response schemas
-    │   │   ├── extraction.py      # Extraction and PATCH schemas
-    │   │   ├── ledger.py          # Ledger entry, summary, and demo seed schemas
-    │   │   ├── money.py           # Minor units conversion utilities (cents/paise)
-    │   │   └── provenance.py      # Provenance and user-edit tracking schemas
-    │   └── services/              # Application services
-    │       ├── storage_service.py # Path traversal defense, magic signatures, SHA-256
-    │       ├── text_extraction_service.py # PDF text layer, Tesseract OCR, plain text parser
-    │       ├── local_ai.py        # Local LM Studio OpenAI-compatible client
-    │       └── validation_service.py # Deterministic math guards, dates, duplicates, categories
-    └── tests/                     # Automated Pytest test suite
-        ├── conftest.py            # In-memory test fixtures and FastAPI TestClient
-        ├── test_startup.py        # Directory creation & database initialization
-        ├── test_health.py         # Health, OpenAPI schema, and Swagger UI
-        ├── test_models.py         # Monetary minor units, UUIDs, and missing fields
-        ├── test_documents_api.py  # File validation, duplicate detection, listing & deletion
-        ├── test_local_ai_and_processing.py # AI extraction, prompts, mocks, and timeout handling
-        ├── test_phase3_workflow.py # Full review bench, field editing, validation, and approval
-        └── test_phase4_reliability.py # Idempotency, path traversal defense, CSV escaping, cascades
+│       ├── api.js                 # Resilient multi-host FastAPI client module
+│       ├── app.js                 # Review bench, field pinning, guards, and ledger
+│       └── veins.js               # Canvas procedural leaf-vein animation
+├── backend/                       # Python FastAPI application
+│   ├── requirements.txt           # Backend requirements
+│   ├── app/
+│   │   ├── main.py                # FastAPI app, lifespan, CORS, and static mounting
+│   │   ├── config.py              # Pydantic BaseSettings, directory management
+│   │   ├── database.py            # SQLite engine, session maker, table creation
+│   │   ├── api/v1/                # REST API endpoints
+│   │   │   ├── health.py          # GET /api/v1/health
+│   │   │   ├── ai.py              # GET /api/v1/ai/status, test-connection, models
+│   │   │   ├── documents.py       # Ingestion, review, PATCH, validate, approve
+│   │   │   ├── ledger.py          # Approved ledger, summaries, and CSV export
+│   │   │   └── router.py          # Unified v1 router
+│   │   ├── models/                # SQLAlchemy ORM models (Document, Extraction, Ledger)
+│   │   ├── schemas/               # Pydantic schemas (Money, Document, Provenance)
+│   │   └── services/              # Core business services
+│   │       ├── storage_service.py # Path traversal defense & SHA-256 deduplication
+│   │       ├── text_extraction_service.py # PDF parsing & Tesseract OCR
+│   │       ├── local_ai.py        # LM Studio OpenAI-compatible client
+│   │       └── validation_service.py # Deterministic math guards & date validators
+│   └── tests/                     # 36 automated unit & integration tests
+└── README.md                      # Project documentation
 ```
 
 ---
 
-## 3. Supported File Types & Privacy Boundaries
-
-### Supported Ingestion Types
-- **PDF Documents (`.pdf`):** Fast extraction from digital text layers via `pypdf`, falling back to OCR for scanned PDFs.
-- **Images (`.png`, `.jpg`, `.jpeg`, `.webp`):** Optical Character Recognition (OCR) via local `pytesseract` and Pillow.
-- **Plain Text (`.txt`):** Direct UTF-8 ingestion.
-
-### Privacy Boundaries
-- **Server Binding:** The FastAPI application binds strictly to `127.0.0.1` by default to avoid exposing internal endpoints on local area networks.
-- **Path Traversal Defense:** `StorageService` strictly verifies that resolved file paths reside within `data/uploads/` and generates random UUID filenames.
-- **Data Retention:** Documents and SQLite records remain on local disk. No third-party analytics, telemetry, or external cloud LLM APIs are contacted.
-- **Local AI Connection:** Requests to LM Studio travel entirely over local loopback (`http://127.0.0.1:1234/v1`).
-
----
-
-## 4. Environment Setup & Installation
+## Installation & Setup
 
 ### Prerequisites
-- **Python:** 3.10 or higher (tested with Python 3.12.3)
-- **Tesseract OCR (System dependency for images and scanned PDFs):**
-  > **Note:** Python's `pytesseract` library is already listed in `requirements.txt`, but it requires the native Tesseract OCR engine installed on your operating system to process images (`.png`, `.jpg`, `.webp`) and scanned PDFs:
-  - **Ubuntu / Debian:** `sudo apt-get update && sudo apt-get install -y tesseract-ocr`
-  - **macOS (Homebrew):** `brew install tesseract`
-  - **Windows:** Download the installer from [UB-Mannheim Tesseract](https://github.com/UB-Mannheim/tesseract/wiki) and ensure it is added to your system `PATH`.
-  *(Text-based PDFs and `.txt` files do not require Tesseract and work out of the box).*
+
+1. **Python 3.10+** (Tested on Python 3.12).
+2. **LM Studio** (or Ollama) running locally on your computer.
+3. An active model loaded in LM Studio (e.g. `llama-3.2-1b-instruct`, `gemma-3-4b`, or `qwen3-8b`).
+4. **Tesseract OCR (for scanned images and photo receipts):**
+   - **Ubuntu / Debian:** `sudo apt-get update && sudo apt-get install -y tesseract-ocr`
+   - **macOS:** `brew install tesseract`
+   - **Windows:** Download from [UB-Mannheim Tesseract](https://github.com/UB-Mannheim/tesseract/wiki) and add to system `PATH`.
+   *(Text-based PDFs and `.txt` documents work immediately without Tesseract).*
+
+---
 
 ### 1. Clone & Set Up Virtual Environment
+
 ```bash
-# Navigate to the project root
+git clone https://github.com/Garg-Pankaj29/LedgerLeaf.git
 cd LedgerLeaf
 
-# Create virtual environment
+# Create and activate virtual environment
 python3 -m venv .venv
-
-# Activate virtual environment
 source .venv/bin/activate       # Linux / macOS
 # or: .venv\Scripts\activate   # Windows
-```
 
-### 2. Install Dependencies
-```bash
+# Install dependencies
 pip install -r requirements.txt
 ```
 
-### 3. Configure Environment Variables
+---
+
+### 2. Configure Environment
+
+Copy the configuration template:
+
 ```bash
 cp .env.example .env
 ```
 
-Review or adjust `.env` if desired:
+Default `.env` settings:
 ```env
 APP_NAME=LedgerLeaf
 APP_ENV=development
@@ -149,127 +217,131 @@ DATABASE_URL=sqlite:///./data/ledgerleaf.db
 UPLOAD_DIR=data/uploads
 MAX_UPLOAD_MB=15
 
-CORS_ORIGINS=["http://localhost:8000","http://127.0.0.1:8000","http://localhost:3000","http://127.0.0.1:3000"]
+# Security & CORS
+CORS_ORIGINS=["http://localhost:8000","http://127.0.0.1:8000","http://localhost:3000","http://127.0.0.1:3000","null"]
 
+# Local LM Studio / OpenAI-Compatible Server
 AI_PROVIDER=lm_studio
 AI_BASE_URL=http://127.0.0.1:1234/v1
-AI_MODEL=meta-llama-3.1-8b-instruct
+AI_MODEL=llama-3.2-1b-instruct
 AI_TIMEOUT_SECONDS=120
-AI_MAX_RETRIES=1
-```
-
-### 4. Database Migrations
-Database tables auto-initialize on startup. To inspect or run versioned Alembic migrations:
-```bash
-alembic upgrade head
 ```
 
 ---
 
-## 5. Local AI Setup with LM Studio
+### 3. Start Local AI & Run LedgerLeaf
 
-To enable zero-cloud, fully offline structured extraction:
+1. Open **LM Studio**, load your model (e.g. `llama-3.2-1b-instruct`), and start the **Local Server** on port `1234` with CORS enabled.
+2. Start the FastAPI backend:
 
-1. **Install LM Studio:** Download and install from [https://lmstudio.ai](https://lmstudio.ai).
-2. **Download an Instruction Model:** In the search tab inside LM Studio, download a modern open-weight instruction model:
-   - **Recommended:** `meta-llama-3.1-8b-instruct` or `mistral-7b-instruct-v0.3` (GGUF format, `Q4_K_M` or `Q5_K_M`).
-3. **Start the Local Inference Server:**
-   - Go to the **Local Server** tab (icon `<->` on the left sidebar).
-   - Select your downloaded model from the top dropdown to load it into memory.
-   - Ensure the server port is set to `1234` and CORS is enabled.
-   - Click **Start Server**.
-   - Verify logs state: `HTTP server listening on http://127.0.0.1:1234`.
-4. **Offline Mode:** If LM Studio is not running, LedgerLeaf operates cleanly in offline mode: you can still upload documents, view extracted text, manually input and edit fields, run deterministic validation checks, approve records, and export CSVs.
-
----
-
-## 6. How to Run Frontend & Backend Locally
-
-### Option A: Run Backend + Static Frontend via FastAPI (Single Server)
 ```bash
-# Start FastAPI backend
 uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
-Open your browser to:
-- **Application UI:** [http://127.0.0.1:8000/app](http://127.0.0.1:8000/app)
-- **Interactive Swagger Docs:** [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
-- **ReDoc Documentation:** [http://127.0.0.1:8000/redoc](http://127.0.0.1:8000/redoc)
 
-### Option B: Run Separate Dev Servers
-```bash
-# Terminal 1: Backend
-uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --reload
-
-# Terminal 2: Frontend static server
-python3 -m http.server 3000 --directory frontend
+3. Open your browser to:
 ```
-Open your browser to:
-- **Frontend App:** [http://127.0.0.1:3000](http://127.0.0.1:3000)
+http://127.0.0.1:8000/app/
+```
+*(The top navigation badge will glow green with `● AI: <your-model-name>` indicating live local connection).*
 
 ---
 
-## 7. API Endpoints Reference
+## Usage Guide
 
-### AI Health & Status
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/api/v1/health` | Service health, SQLite connectivity, and version |
-| `GET` | `/api/v1/ai/status` | Current LM Studio connectivity status and active model |
-| `POST` | `/api/v1/ai/test-connection` | Probe local AI latency and list available models |
-| `GET` | `/api/v1/ai/models` | List all models loaded or cached in LM Studio |
-
-### Document Management & Extraction
-| Method | Endpoint | Description |
-|---|---|---|
-| `POST` | `/api/v1/documents` | Upload document (MIME, size, magic signature checks, SHA-256) |
-| `GET` | `/api/v1/documents` | List uploaded documents with status and metadata |
-| `GET` | `/api/v1/documents/{id}` | Retrieve document details and processing history |
-| `DELETE` | `/api/v1/documents/{id}` | Safely delete document, extractions, and stored disk file |
-| `POST` | `/api/v1/documents/{id}/process` | Trigger local AI extraction and deterministic validation |
-| `GET` | `/api/v1/documents/{id}/extraction` | Get latest extracted fields and source provenance |
-| `PATCH` | `/api/v1/documents/{id}/extraction` | Edit extracted fields (records user edits in provenance) |
-| `POST` | `/api/v1/documents/{id}/validate` | Run deterministic math guards and return diagnostic issues |
-| `POST` | `/api/v1/documents/{id}/approve` | Commit approved record to the persistent ledger (blocks on issues) |
-| `POST` | `/api/v1/documents/{id}/reject` | Mark document review status as rejected |
-
-### Approved Ledger & Multi-Currency Analytics
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/api/v1/ledger` | Retrieve all approved ledger entries with trust indicators |
-| `GET` | `/api/v1/ledger/summary` | Multi-currency summary (strict currency isolation) |
-| `GET` | `/api/v1/ledger/export.csv` | RFC 4180 compliant CSV export of approved entries |
-| `POST` | `/api/v1/ledger/demo-sample` | Explicitly insert a demo sample entry (`is_demo=True`) |
-| `POST` | `/api/v1/ledger/seed-demo-samples` | Seed sample multi-currency demo records (USD, EUR, INR) |
-| `DELETE` | `/api/v1/ledger/{id}` | Remove entry from ledger and restore document to `needs_review` |
+1. **Access the Review Bench:** Open `http://127.0.0.1:8000/app/` in your browser.
+2. **Upload a Receipt or Invoice:**
+   - Click **＋ Upload** or drag a file (`.pdf`, `.png`, `.jpg`, `.webp`, `.txt`).
+   - The file is securely saved to `data/uploads/`, and text/OCR extraction runs immediately.
+3. **Automatic Local Extraction:** The local open-weight model extracts vendor, date, currency, line items, tax, and total.
+4. **Inspect Source Provenance:**
+   - Click any field in the right pane: the exact line where the number was found is highlighted in green on the original document text.
+   - Click any highlighted snippet in the document view to jump to the corresponding input box.
+5. **Deterministic Guard Verification:**
+   - If `subtotal + tax != total`, a warning chip flags the arithmetic discrepancy.
+   - If fields are unverified, you can edit them directly. Changes are recorded in field provenance history.
+6. **Approve Record:**
+   - Once the record is verified, click **Approve record**.
+   - The entry is committed to your permanent SQLite ledger as integer minor units.
+7. **View Ledger & Export CSV:**
+   - Scroll down to the **Approved ledger** section to view isolated currency breakdowns.
+   - Click **Build CSV of approved records** to export or copy RFC 4180 compliant accounting summaries.
 
 ---
 
-## 8. Testing Instructions
+## Design Philosophy
 
-Run the automated Pytest test suite:
+- **AI Proposes, Deterministic Code Guards, Humans Decide:** Language models are probabilistic pattern matchers, not accountants. LedgerLeaf treats model outputs as untrusted proposals until verified by strict math rules and reviewed by a person.
+- **Privacy Is Binary:** Financial paperwork should not be processed by remote cloud endpoints. By running models locally through open-weight architectures, data privacy is absolute.
+- **Line-Level Traceability:** A financial tool should never present a number without proving where it originated. Source pinning eliminates guesswork.
+- **Strict Multi-Currency Isolation:** Currencies must never be arbitrarily converted or merged without explicit currency rates. Each currency maintains its own independent balance.
+
+---
+
+## Open Innovation & Local-First AI
+
+LedgerLeaf showcases why open-source AI and open-weight models are vital for real-world software:
+
+- **True Data Sovereignty:** Personal tax documents and receipts never leave `127.0.0.1`. No training on your financial records.
+- **Zero Metered Costs:** Freelancers and small businesses can parse thousands of documents without incurring API rate limits, per-token billing, or recurring SaaS fees.
+- **Model Flexibility:** Swap between `llama-3.2-1b-instruct`, `gemma-3-4b`, or larger models without altering a single line of backend logic.
+- **Perpetual Availability:** LedgerLeaf operates completely offline once dependencies and model weights are downloaded.
+
+---
+
+## Hacktoberfest & Open-Source AI Challenge
+
+LedgerLeaf was developed for the **Hacktoberfest 2026 Open-Source AI Challenge** under the **Side Hustle** category.
+
+It addresses a universal problem for independent creators, freelancers, and side hustlers: transforming shoeboxes of messy receipts into verified, audit-ready bookkeeping records with zero recurring SaaS costs and zero privacy compromises.
+
+---
+
+## Running the Automated Test Suite
+
+LedgerLeaf includes a comprehensive test suite of 37 automated tests verifying database initialization, duplicate detection, arithmetic validation guards, CSV escaping, and offline AI resilience:
+
 ```bash
-pytest backend/tests -v
+# Run test suite
+pytest
 ```
 
-### Coverage Highlights (37 Automated Tests)
-- **Security & Storage:** File magic byte validation, size limit enforcement, path traversal defense (`../../etc/passwd` rejection).
-- **Integrity & Cascades:** Document deletion safely unlinks disk files and cascades extraction and provenance records.
-- **Approval Idempotency:** Repeated approval calls return `already_approved` without duplicating ledger entries.
-- **Mathematical Guard:** Deterministic cross-checking of `subtotal + tax == total`, flagging discrepancies without altering numbers.
-- **Local AI Failure Handling:** Graceful 503 handling on LM Studio connection failure or timeout without inventing fake output.
-- **CSV & Trust Metrics:** Proper RFC 4180 escaping (commas, quotes, newlines) and source/trust attribution (`demo` vs `user`).
+Expected output:
+```text
+36 passed, 1 skipped in 0.79s
+```
+*(The skipped test is the live LM Studio integration check, which executes automatically when LM Studio is running).*
 
 ---
 
-## 9. Known Limitations & Troubleshooting
+## Known Limitations
 
-### Known Limitations
-1. **OCR on Noisy Images:** Skewed, crumpled, low-contrast, or handwritten receipts may produce incomplete OCR text. Users can manually type or adjust fields in the review bench.
-2. **Inference Latency on CPU:** Running 8B models entirely on CPU without GPU acceleration can take 15–45 seconds per document. Use quantized models (e.g. `Q4_K_M`) and allocate GPU layers in LM Studio when possible.
-3. **Multi-Page Tabular Invoices:** Complex multi-page invoices with multi-line item tables are currently extracted as high-level summary fields and line items; highly nested table layouts may require manual verification.
+- **OCR Quality on Degraded Receipts:** Faded thermal receipts or blurry camera angles may require manual field adjustment on the review bench.
+- **Single-Node Local SQLite:** Optimized for local, single-user operation on a personal laptop or workstation.
+- **Document Scope:** Built as an intelligent review and ingestion assistant; does not replace certified tax advisors or double-entry accounting software.
 
-### Troubleshooting
-- **AI status shows `○ AI: offline`:** Verify LM Studio is open, a model is loaded, and the local server is started on port 1234.
-- **Upload fails with `Unsupported file type`:** Verify the file has an allowed extension (`.pdf`, `.png`, `.jpg`, `.jpeg`, `.webp`, `.txt`) and matches its actual content signature (not renamed binary).
-- **Port conflicts:** If port 8000 or 3000 is occupied, set `PORT=8001` in `.env` and start with `--port 8001`.
-- **Resetting the database:** To reset test data, remove `data/ledgerleaf.db` and restart the backend server; tables will auto-initialize cleanly.
+---
+
+## Future Directions
+
+- Multi-page PDF visual overlay highlighting directly onto rendered canvas pages.
+- Native bank statement (`.ofx` / `.qif`) reconciliation matching.
+- Mobile companion camera helper over local Wi-Fi.
+- Automated tax category deduction suggestions based on country-specific expense rules.
+
+---
+
+## Contributing
+
+Contributions, feedback, and issue reports are welcome:
+
+1. Fork the repository.
+2. Create your feature branch (`git checkout -b feature/amazing-feature`).
+3. Commit your changes (`git commit -m "feat: add support for multi-page canvas overlays"`).
+4. Push to the branch (`git push origin feature/amazing-feature`).
+5. Open a Pull Request.
+
+---
+
+## License
+
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
