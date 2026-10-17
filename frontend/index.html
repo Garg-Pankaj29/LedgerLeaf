@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>LedgerLeaf — Your finances. Your files. Your AI.</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&family=Source+Serif+4:wght@400;600&display=swap">
+  <link rel="stylesheet" href="css/style.css?v=3">
+</head>
+<body>
+  <canvas id="veins" aria-hidden="true"></canvas>
+  <header>
+    <nav>
+      <div class="logo">
+        <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true">
+          <path d="M3 23C3 10 10 3 23 3c0 13-7 20-20 20z" fill="var(--leaf)"/>
+          <path d="M5 21L17 9M11 15l1 4M14 12l4 0" stroke="var(--paper)" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+        </svg>
+        LedgerLeaf
+      </div>
+      <div class="nav-actions">
+        <span id="ai-status" class="chip" title="Checking local AI engine connectivity">Probing AI...</span>
+        <button class="ghost" id="theme" aria-label="Switch between light and dark theme">Theme: auto</button>
+      </div>
+    </nav>
+    <h1 aria-label="Your finances. Your files. Your AI.">
+      <span>Your</span> <span>finances.</span> <span>Your</span> <span>files.</span> <span>Your</span> <span>AI.</span>
+    </h1>
+    <p class="lede">LedgerLeaf turns receipts and invoices into structured records on your own machine. Every number points back to the line it came from, and nothing counts until you approve it.</p>
+    <p class="promise">Drop in the paperwork. Let local AI organize it. Review before it counts.</p>
+    <button class="btn" onclick="document.getElementById('bench').scrollIntoView()">Try the review bench</button>
+    <p class="note">Move your pointer: the page grows leaf veins along your ledger lines, the same way records grow here, one verified branch at a time.</p>
+  </header>
+
+  <main>
+    <section id="bench" aria-labelledby="h-bench">
+      <h2 id="h-bench">The review bench</h2>
+      <p class="sub">Pick an uploaded document, test with synthetic samples, or drop in your own files. Click a field to see its source on the page, or click a highlight to jump to its field. Edit anything the guard flags.</p>
+      <div class="note">
+        <b>Local-first pipeline:</b> Documents are processed through your local open-weight model behind LM Studio. Source-pinning, deterministic math guards, and human approval protect the ledger from model errors.
+      </div>
+
+      <input type="file" id="file-input" accept=".pdf,.png,.jpg,.jpeg,.webp,.txt" style="display:none" aria-hidden="true">
+
+      <div class="bench">
+        <div class="card">
+          <div id="tabs" role="group" aria-label="Documents"></div>
+          <div id="docview"></div>
+        </div>
+        <div class="card">
+          <div id="fields"></div>
+          <div id="guard" class="guard" aria-live="polite"></div>
+          <div class="bench-actions">
+            <button class="btn" id="approve">Approve record</button>
+            <span id="msg" aria-live="polite" style="color:var(--mute)"></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="h-led">
+      <h2 id="h-led">Approved ledger</h2>
+      <p class="sub">Totals use approved records only, and each currency stays on its own line. Nothing is converted or merged.</p>
+      <div id="totals" class="totals"></div>
+      <div class="card" style="overflow-x:auto">
+        <div id="table"></div>
+      </div>
+      <p style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+        <button class="ghost" id="mkcsv">Build CSV of approved records</button>
+        <button class="ghost" id="copycsv">Copy CSV</button>
+        <button class="ghost" id="btn-seed-samples" title="Load sample demo records into the ledger to test multi-currency reporting">＋ Load demo samples</button>
+      </p>
+      <textarea id="csv" readonly aria-label="CSV output" placeholder="CSV appears here once you build it."></textarea>
+    </section>
+
+    <section aria-labelledby="h-why">
+      <h2 id="h-why">Privacy boundaries & model capabilities</h2>
+      <p class="sub">Local-first financial paperwork assistance. Built for transparency, privacy, and deterministic control.</p>
+      <div class="three">
+        <div class="card">
+          <h3>Local privacy boundary</h3>
+          <p>By default, files and database records stay entirely on your local machine (bound to 127.0.0.1). Documents never leave your device unless you explicitly export CSV data or configure an external integration.</p>
+        </div>
+        <div class="card">
+          <h3>What the AI model can &amp; cannot do</h3>
+          <p>Local open-weight models propose structured fields from messy receipts. However, smaller models can hallucinate numbers. The model proposes; deterministic arithmetic guards and human review verify before anything counts.</p>
+        </div>
+        <div class="card">
+          <h3>Not an accounting replacement</h3>
+          <p>LedgerLeaf is a review and extraction assistant. It does not replace a professional certified accountant, tax adviser, or double-entry accounting software.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>LedgerLeaf · Private local-first bookkeeping assistant. Records stored privately in local SQLite database on your machine. Does not replace professional accounting software.</footer>
+
+  <script src="js/veins.js?v=3"></script>
+  <script type="module" src="js/app.js?v=3"></script>
+</body>
+</html>
